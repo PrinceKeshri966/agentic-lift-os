@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LIFT OS — Dispatch Simulation</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+
+  <style>
+    /* ══════════════════════════════════════════════
+       DESIGN SYSTEM — Industrial Mission Control
+    ══════════════════════════════════════════════ */
+    :root {
+      --bg:        #050b18;
+      --panel:     #080f22;
+      --panel-2:   #0b1530;
+      --border:    #142038;
+      --border-2:  #1c2e50;
+      --text:      #7a93b8;
+      --text-b:    #b8cce0;
+      --text-w:    #ddeeff;
+
+      --l1:        #4da8ff;   /* Lift 1 – Blue  */
+      --l1-a:      rgba(77,168,255,.14);
+      --l1-g:      rgba(77,168,255,.45);
+      --l2:        #29d98a;   /* Lift 2 – Green */
+      --l2-a:      rgba(41,217,138,.14);
+      --l2-g:      rgba(41,217,138,.45);
+      --l3:        #ffb140;   /* Lift 3 – Amber */
+      --l3-a:      rgba(255,177,64,.14);
+      --l3-g:      rgba(255,177,64,.45);
+
+      --c-sim:     #c084fc;   /* Simulator log  */
+      --c-dis:     #22d3ee;   /* Dispatcher log */
+      --c-sys:     #506070;   /* System log     */
+
+      --fh: 74px;   /* floor height  */
+      --lw: 76px;   /* lift car w    */
+      --lh: 60px;   /* lift car h    */
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Rajdhani', 'Segoe UI', sans-serif;
+      overflow: hidden;
+    }
+
+    /* Subtle scanline texture */
+    body::after {
+      content: '';
+      position: fixed; inset: 0;
+      background: repeating-linear-gradient(
+        0deg, transparent, transparent 3px,
+        rgba(0,0,0,.04) 3px, rgba(0,0,0,.04) 4px
+      );
+      pointer-events: none;
+      z-index: 9999;
+    }
+
+    /* ── HEADER ──────────────────────────────────── */
+    #header {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      padding: 0 22px;
+      height: 54px;
+      background: linear-gradient(90deg, #08122a 0%, #0c1f40 40%, #08122a 100%);
+      border-bottom: 1px solid var(--border-2);
+      flex-shrink: 0;
+    }
+
+    #logo {
+      font-family: 'Bebas Neue', Impact, sans-serif;
+      font-size: 30px;
+      letter-spacing: 5px;
+      color: var(--text-w);
+      text-shadow: 0 0 24px rgba(77,168,255,.55);
+    }
+    #logo em { color: var(--l1); font-style: normal; }
+
+    .hdiv { width: 1px; height: 26px; background: var(--border-2); }
+
+    .hstat { display: flex; flex-direction: column; gap: 1px; }
+    .hstat .hl { font-size: 9px; letter-spacing: 2px; text-transform: uppercase; color: var(--c-sys); }
+    .hstat .hv { font-family: 'Share Tech Mono', monospace; font-size: 15px; color: var(--text-b); }
+
+    #badge {
+      margin-left: auto;
+      display: flex; align-items: center; gap: 7px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 11px; letter-spacing: 2px; text-transform: uppercase;
+      color: var(--text);
+    }
+    .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--l2);
+      box-shadow: 0 0 10px var(--l2);
+      animation: blink 2s infinite;
+    }
+    .dot.off { background: #f56565; box-shadow: 0 0 8px #f56565; animation: none; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.35} }
+
+    /* ── APP SHELL ────────────────────────────────── */
+    #app {
+      display: flex;
+      height: calc(100vh - 54px);
+      overflow: hidden;
+    }
+
+    /* ── LEFT COLUMN ─────────────────────────────── */
+    #left {
+      width: 530px;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 12px 12px 12px 16px;
+      border-right: 1px solid var(--border);
+      overflow: hidden;
+    }
+
+    /* Lift Status Cards */
+    #cards {
+      display: flex;
+      gap: 7px;
+    }
+
+    .card {
+      flex: 1;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      padding: 10px 12px 9px;
+      position: relative;
+      overflow: hidden;
+    }
+    .card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0; height: 2px;
+    }
+    .card[data-l="1"]::before { background: var(--l1); }
+    .card[data-l="2"]::before { background: var(--l2); }
+    .card[data-l="3"]::before { background: var(--l3); }
+
+    .card-head {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 4px;
+    }
+    .card-name {
+      font-size: 10px; letter-spacing: 3px; text-transform: uppercase; font-weight: 700;
+    }
+    .card[data-l="1"] .card-name { color: var(--l1); }
+    .card[data-l="2"] .card-name { color: var(--l2); }
+    .card[data-l="3"] .card-name { color: var(--l3); }
+    .card-dir { font-size: 16px; }
+
+    .card-floor {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 30px; line-height: 1;
+      color: var(--text-w);
+    }
+    .card-sub {
+      font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase;
+      color: var(--c-sys); margin: 2px 0 7px;
+    }
+
+    .card-bar {
+      width: 100%; height: 3px; background: var(--border);
+      border-radius: 2px; overflow: hidden; margin-bottom: 5px;
+    }
+    .card-fill {
+      height: 100%; border-radius: 2px; transition: width .4s ease;
+    }
+    .card[data-l="1"] .card-fill { background: var(--l1); }
+    .card[data-l="2"] .card-fill { background: var(--l2); }
+    .card[data-l="3"] .card-fill { background: var(--l3); }
+
+    .card-targets {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 10px; color: var(--c-sys);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+
+    /* Building Wrapper */
+    #bwrap {
+      flex: 1;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      padding: 12px 14px 8px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .sec-title {
+      font-size: 9px; letter-spacing: 3px; text-transform: uppercase;
+      color: var(--c-sys); margin-bottom: 10px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .sec-title::after {
+      content: ''; flex: 1; height: 1px; background: var(--border);
+    }
+
+    /* Building grid */
+    #bld {
+      display: flex;
+      gap: 0;
+      flex: 1;
+    }
+
+    /* Floor label column */
+    #flabels {
+      width: 34px;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .flabel {
+      height: var(--fh);
+      display: flex; align-items: center; justify-content: flex-end;
+      padding-right: 8px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 11px; color: var(--text);
+      border-bottom: 1px solid var(--border);
+    }
+    .flabel:last-child { border-bottom: none; }
+    .flabel.g  { color: var(--text-b); }
+    .flabel.b1 { color: var(--c-sim);  }
+
+    /* Shaft container */
+    #shafts {
+      flex: 1;
+      display: flex;
+      gap: 7px;
+    }
+
+    .shaft {
+      flex: 1;
+      position: relative;
+      height: calc(var(--fh) * 7);
+      background: #040b1a;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      /* floor dividers via repeating gradient */
+      background-image: repeating-linear-gradient(
+        to bottom,
+        transparent 0px,
+        transparent calc(var(--fh) - 1px),
+        var(--border) calc(var(--fh) - 1px),
+        var(--border) var(--fh)
+      );
+    }
+
+    /* Lift car */
+    .car {
+      position: absolute;
+      width: var(--lw);
+      height: var(--lh);
+      left: 50%;
+      transform: translateX(-50%);
+      border-radius: 7px;
+      border: 1px solid;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      transition: top .48s cubic-bezier(.4,0,.2,1);
+      z-index: 5;
+      overflow: hidden;
+    }
+    .car[data-c="1"] {
+      background: var(--l1-a); border-color: var(--l1);
+      box-shadow: 0 0 12px rgba(77,168,255,.2);
+    }
+    .car[data-c="2"] {
+      background: var(--l2-a); border-color: var(--l2);
+      box-shadow: 0 0 12px rgba(41,217,138,.2);
+    }
+    .car[data-c="3"] {
+      background: var(--l3-a); border-color: var(--l3);
+      box-shadow: 0 0 12px rgba(255,177,64,.2);
+    }
+    .car.glow-1 { box-shadow: 0 0 22px var(--l1-g) !important; }
+    .car.glow-2 { box-shadow: 0 0 22px var(--l2-g) !important; }
+    .car.glow-3 { box-shadow: 0 0 22px var(--l3-g) !important; }
+
+    .car-badge {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 9px; letter-spacing: 1px;
+    }
+    .car[data-c="1"] .car-badge { color: var(--l1); }
+    .car[data-c="2"] .car-badge { color: var(--l2); }
+    .car[data-c="3"] .car-badge { color: var(--l3); }
+
+    .car-arrow { font-size: 18px; line-height: 1; }
+    .car[data-c="1"] .car-arrow { color: var(--l1); }
+    .car[data-c="2"] .car-arrow { color: var(--l2); }
+    .car[data-c="3"] .car-arrow { color: var(--l3); }
+
+    .car-mini-bar {
+      width: 36px; height: 2px; background: rgba(255,255,255,.1);
+      border-radius: 1px; overflow: hidden;
+    }
+    .car-mini-fill { height: 100%; border-radius: 1px; transition: width .4s; }
+    .car[data-c="1"] .car-mini-fill { background: var(--l1); }
+    .car[data-c="2"] .car-mini-fill { background: var(--l2); }
+    .car[data-c="3"] .car-mini-fill { background: var(--l3); }
+
+    /* Shaft labels */
+    #slabels {
+      display: flex;
+      gap: 7px;
+      margin-top: 5px;
+      padding-left: 34px;
+    }
+    .slabel {
+      flex: 1; text-align: center;
+      font-size: 9px; letter-spacing: 2px; text-transform: uppercase;
+    }
+    .slabel[data-s="1"] { color: var(--l1); }
+    .slabel[data-s="2"] { color: var(--l2); }
+    .slabel[data-s="3"] { color: var(--l3); }
+
+    /* ── RIGHT COLUMN ────────────────────────────── */
+    #right {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 12px 16px;
+      overflow: hidden;
+      min-width: 0;
+    }
+
+    /* Stats row */
+    #stats {
+      display: flex;
+      gap: 8px;
+    }
+    .schip {
+      flex: 1;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      padding: 10px 14px;
+      display: flex; flex-direction: column; gap: 2px;
+    }
+    .schip .sl { font-size: 9px; letter-spacing: 2px; text-transform: uppercase; color: var(--c-sys); }
+    .schip .sv {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 24px; color: var(--text-w);
+    }
+
+    /* Log panel */
+    #logpanel {
+      flex: 1;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      display: flex; flex-direction: column;
+      overflow: hidden;
+    }
+    #loghead {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 9px 14px;
+      border-bottom: 1px solid var(--border);
+      font-size: 9px; letter-spacing: 3px; text-transform: uppercase;
+      color: var(--c-sys);
+      flex-shrink: 0;
+    }
+    #logcnt {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 10px; color: var(--border-2);
+    }
+
+    #logs {
+      flex: 1;
+      overflow-y: auto;
+      padding: 6px 0;
+    }
+    #logs::-webkit-scrollbar { width: 4px; }
+    #logs::-webkit-scrollbar-track { background: transparent; }
+    #logs::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 2px; }
+
+    .le {
+      display: flex; align-items: baseline; gap: 7px;
+      padding: 2px 14px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 11.5px; line-height: 1.65;
+      animation: slideIn .18s ease;
+    }
+    .le:hover { background: rgba(255,255,255,.02); }
+
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateX(-5px); }
+      to   { opacity: 1; transform: none; }
+    }
+
+    .le-ts  { font-size: 10px; color: var(--border-2); flex-shrink: 0; width: 58px; }
+    .le-src { font-size: 10px; font-weight: bold; flex-shrink: 0; width: 82px; }
+    .le-msg { color: var(--text); flex: 1; font-size: 10.5px; }
+
+    /* Source colours */
+    .le[data-s="Simulator"]  .le-src { color: var(--c-sim); }
+    .le[data-s="Simulator"]  .le-msg { color: rgba(192,132,252,.6); }
+    .le[data-s="Dispatcher"] .le-src { color: var(--c-dis); }
+    .le[data-s="Dispatcher"] .le-msg { color: rgba(34,211,238,.55); }
+    .le[data-s="System"]     .le-src { color: var(--c-sys); }
+    .le[data-s="Lift 1"]     .le-src { color: var(--l1); }
+    .le[data-s="Lift 1"]     .le-msg { color: rgba(77,168,255,.65); }
+    .le[data-s="Lift 2"]     .le-src { color: var(--l2); }
+    .le[data-s="Lift 2"]     .le-msg { color: rgba(41,217,138,.65); }
+    .le[data-s="Lift 3"]     .le-src { color: var(--l3); }
+    .le[data-s="Lift 3"]     .le-msg { color: rgba(255,177,64,.65); }
+
+    /* Legend pill */
+    #legend {
+      display: flex; gap: 10px; flex-wrap: wrap;
+      padding: 7px 14px;
+      border-top: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .lpill {
+      display: flex; align-items: center; gap: 5px;
+      font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text);
+    }
+    .lpill-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ══ HEADER ══════════════════════════════════════ -->
+<div id="header">
+  <div id="logo">LIFT<em>OS</em></div>
+  <div class="hdiv"></div>
+  <div class="hstat">
+    <span class="hl">Building</span>
+    <span class="hv">B1 → FL5</span>
+  </div>
+  <div class="hstat">
+    <span class="hl">Lifts</span>
+    <span class="hv">3 CARS</span>
+  </div>
+  <div class="hstat">
+    <span class="hl">Algorithm</span>
+    <span class="hv">SCAN+COST</span>
+  </div>
+  <div class="hstat">
+    <span class="hl">Dispatcher</span>
+    <span class="hv">CENTRAL</span>
+  </div>
+  <div id="badge">
+    <div class="dot" id="dot"></div>
+    <span id="badge-txt">CONNECTING</span>
+  </div>
+</div>
+
+<!-- ══ APP ═════════════════════════════════════════ -->
+<div id="app">
+
+  <!-- ── LEFT ───────────────────────────────────── -->
+  <div id="left">
+
+    <!-- Status Cards -->
+    <div id="cards">
+      <div class="card" data-l="1">
+        <div class="card-head">
+          <span class="card-name">Lift 1</span>
+          <span class="card-dir" id="cdir-1">●</span>
+        </div>
+        <div class="card-floor" id="cfloor-1">—</div>
+        <div class="card-sub">Current Floor</div>
+        <div class="card-bar"><div class="card-fill" id="cfill-1" style="width:0"></div></div>
+        <div class="card-targets" id="ctargets-1">IDLE</div>
+      </div>
+      <div class="card" data-l="2">
+        <div class="card-head">
+          <span class="card-name">Lift 2</span>
+          <span class="card-dir" id="cdir-2">●</span>
+        </div>
+        <div class="card-floor" id="cfloor-2">—</div>
+        <div class="card-sub">Current Floor</div>
+        <div class="card-bar"><div class="card-fill" id="cfill-2" style="width:0"></div></div>
+        <div class="card-targets" id="ctargets-2">IDLE</div>
+      </div>
+      <div class="card" data-l="3">
+        <div class="card-head">
+          <span class="card-name">Lift 3</span>
+          <span class="card-dir" id="cdir-3">●</span>
+        </div>
+        <div class="card-floor" id="cfloor-3">—</div>
+        <div class="card-sub">Current Floor</div>
+        <div class="card-bar"><div class="card-fill" id="cfill-3" style="width:0"></div></div>
+        <div class="card-targets" id="ctargets-3">IDLE</div>
+      </div>
+    </div>
+
+    <!-- Building Simulation -->
+    <div id="bwrap">
+      <div class="sec-title">Building Simulation</div>
+      <div id="bld">
+        <!-- Floor labels: 5 → B1 (top to bottom) -->
+        <div id="flabels">
+          <div class="flabel">5</div>
+          <div class="flabel">4</div>
+          <div class="flabel">3</div>
+          <div class="flabel">2</div>
+          <div class="flabel">1</div>
+          <div class="flabel g">G</div>
+          <div class="flabel b1">B1</div>
+        </div>
+        <!-- Three elevator shafts -->
+        <div id="shafts">
+          <div class="shaft" id="shaft-1">
+            <div class="car" data-c="1" id="car-1">
+              <span class="car-badge">L1</span>
+              <span class="car-arrow" id="arr-1">●</span>
+              <div class="car-mini-bar">
+                <div class="car-mini-fill" id="mini-1" style="width:0"></div>
+              </div>
+            </div>
+          </div>
+          <div class="shaft" id="shaft-2">
+            <div class="car" data-c="2" id="car-2">
+              <span class="car-badge">L2</span>
+              <span class="car-arrow" id="arr-2">●</span>
+              <div class="car-mini-bar">
+                <div class="car-mini-fill" id="mini-2" style="width:0"></div>
+              </div>
+            </div>
+          </div>
+          <div class="shaft" id="shaft-3">
+            <div class="car" data-c="3" id="car-3">
+              <span class="car-badge">L3</span>
+              <span class="car-arrow" id="arr-3">●</span>
+              <div class="car-mini-bar">
+                <div class="car-mini-fill" id="mini-3" style="width:0"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- Shaft legend labels -->
+      <div id="slabels">
+        <div class="slabel" data-s="1">LIFT 1</div>
+        <div class="slabel" data-s="2">LIFT 2</div>
+        <div class="slabel" data-s="3">LIFT 3</div>
+      </div>
+    </div>
+
+  </div><!-- /#left -->
+
+  <!-- ── RIGHT ──────────────────────────────────── -->
+  <div id="right">
+    <!-- Stats chips -->
+    <div id="stats">
+      <div class="schip">
+        <span class="sl">Total Requests</span>
+        <span class="sv" id="st-req">0</span>
+      </div>
+      <div class="schip">
+        <span class="sl">Arrivals</span>
+        <span class="sv" id="st-arr">0</span>
+      </div>
+      <div class="schip">
+        <span class="sl">Uptime</span>
+        <span class="sv" id="st-up">0s</span>
+      </div>
+    </div>
+    <!-- Event log -->
+    <div id="logpanel">
+      <div id="loghead">
+        <span>▸ Event Log</span>
+        <span id="logcnt">0 events</span>
+      </div>
+      <div id="logs"></div>
+      <div id="legend">
+        <div class="lpill"><div class="lpill-dot" style="background:var(--c-sim)"></div>Simulator</div>
+        <div class="lpill"><div class="lpill-dot" style="background:var(--c-dis)"></div>Dispatcher</div>
+        <div class="lpill"><div class="lpill-dot" style="background:var(--l1)"></div>Lift 1</div>
+        <div class="lpill"><div class="lpill-dot" style="background:var(--l2)"></div>Lift 2</div>
+        <div class="lpill"><div class="lpill-dot" style="background:var(--l3)"></div>Lift 3</div>
+        <div class="lpill"><div class="lpill-dot" style="background:var(--c-sys)"></div>System</div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /#app -->
+
+<!-- ═══════════════════════════════════════════════
+     LIFT OS — Frontend Controller
+     Connects via WebSocket, renders real-time state
+═══════════════════════════════════════════════ -->
+<script>
+  'use strict';
+
+  /* ── Constants (must match backend) ─────────── */
+  const MAX_FLOOR = 5;
+  const FLOOR_H   = 74;     // CSS --fh in px
+  const LIFT_H    = 60;     // CSS --lh in px
+  const MAX_LOAD  = 8;
+
+  /* ── State ───────────────────────────────────── */
+  const prev       = {};     // previous floor per lift id, for glow detection
+  let   logCount   = 0;
+  const seenKeys   = new Set();
+  const logsEl     = document.getElementById('logs');
+
+  /* ── Helpers ─────────────────────────────────── */
+  function floorLabel(f) {
+    if (f === -1) return 'B1';
+    if (f ===  0) return 'G';
+    return String(f);
+  }
+
+  /**
+   * Convert a floor number to the CSS `top` value (px) for the lift car.
+   * Floor 5 → top of shaft (smallest top); Floor -1 → bottom of shaft.
+   */
+  function floorToTop(f) {
+    const rowOffset = (MAX_FLOOR - f) * FLOOR_H;
+    return rowOffset + Math.floor((FLOOR_H - LIFT_H) / 2);
+  }
+
+  function dirArrow(d) {
+    return d === 'UP' ? '▲' : d === 'DOWN' ? '▼' : '●';
+  }
+
+  /* ── Update a single lift in the DOM ─────────── */
+  function renderLift(lift) {
+    const id  = lift.id;
+    const top = floorToTop(lift.floor);
+
+    /* ── Car in shaft ── */
+    const car = document.getElementById(`car-${id}`);
+    car.style.top = `${top}px`;
+
+    // Glow flash when floor changes
+    if (prev[id] !== undefined && prev[id] !== lift.floor) {
+      car.classList.add(`glow-${id}`);
+      clearTimeout(car._gt);
+      car._gt = setTimeout(() => car.classList.remove(`glow-${id}`), 560);
+    }
+    prev[id] = lift.floor;
+
+    // Arrow + mini load bar inside car
+    document.getElementById(`arr-${id}`).textContent = dirArrow(lift.direction);
+    const loadPct = Math.round((lift.load / MAX_LOAD) * 100);
+    document.getElementById(`mini-${id}`).style.width = `${loadPct}%`;
+
+    /* ── Status card ── */
+    document.getElementById(`cfloor-${id}`).textContent = floorLabel(lift.floor);
+    document.getElementById(`cdir-${id}`).textContent   = dirArrow(lift.direction);
+    document.getElementById(`cfill-${id}`).style.width  = `${loadPct}%`;
+    const tEl = document.getElementById(`ctargets-${id}`);
+    tEl.textContent = lift.targets.length
+      ? 'Stops: ' + lift.targets.map(floorLabel).join(' → ')
+      : 'IDLE';
+  }
+
+  /* ── Append new log lines ────────────────────── */
+  function renderLogs(logs) {
+    const atBottom = logsEl.scrollHeight - logsEl.scrollTop - logsEl.clientHeight < 80;
+    let added = false;
+
+    for (const e of logs) {
+      const key = `${e.ts}|${e.source}|${e.msg}`;
+      if (seenKeys.has(key)) continue;
+      seenKeys.add(key);
+
+      // Bound the Set size to prevent memory leak over long sessions
+      if (seenKeys.size > 800) seenKeys.delete(seenKeys.values().next().value);
+
+      const row = document.createElement('div');
+      row.className = 'le';
+      row.dataset.s = e.source;
+      row.innerHTML =
+        `<span class="le-ts">${e.ts}</span>` +
+        `<span class="le-src">[${e.source}]</span>` +
+        `<span class="le-msg">${e.msg}</span>`;
+
+      logsEl.appendChild(row);
+      logCount++;
+      added = true;
+    }
+
+    document.getElementById('logcnt').textContent = `${logCount} events`;
+    if (added && atBottom) logsEl.scrollTop = logsEl.scrollHeight;
+  }
+
+  /* ── Update global stats ─────────────────────── */
+  function renderStats(s) {
+    document.getElementById('st-req').textContent = s.requests;
+    document.getElementById('st-arr').textContent = s.arrivals;
+    const m = Math.floor(s.uptime / 60);
+    const sec = s.uptime % 60;
+    document.getElementById('st-up').textContent = m > 0 ? `${m}m ${sec}s` : `${sec}s`;
+  }
+
+  /* ── Main state handler ──────────────────────── */
+  function onState(state) {
+    state.lifts.forEach(renderLift);
+    renderLogs(state.logs);
+    if (state.stats) renderStats(state.stats);
+  }
+
+  /* ════════════════════════════════════════════════
+     WebSocket  —  connect with auto-reconnect
+  ════════════════════════════════════════════════ */
+  const dot   = document.getElementById('dot');
+  const btxt  = document.getElementById('badge-txt');
+  let   ws, pingTimer, reconnTimer;
+
+  function connect() {
+    ws = new WebSocket(`ws://${location.host}/ws`);
+
+    ws.onopen = () => {
+      dot.classList.remove('off');
+      btxt.textContent = 'LIVE';
+      clearTimeout(reconnTimer);
+      // Heartbeat ping every 25 s to keep the connection alive
+      clearInterval(pingTimer);
+      pingTimer = setInterval(() => {
+        if (ws.readyState === WebSocket.OPEN) ws.send('ping');
+      }, 25_000);
+    };
+
+    ws.onmessage = ({ data }) => {
+      try { onState(JSON.parse(data)); }
+      catch (e) { console.error('Parse error', e); }
+    };
+
+    ws.onclose = ws.onerror = () => {
+      dot.classList.add('off');
+      btxt.textContent = 'RECONNECTING';
+      clearInterval(pingTimer);
+      reconnTimer = setTimeout(connect, 2_500);
+    };
+  }
+
+  /* ── Position all lift cars at their initial
+     floor (before first WebSocket message) ─────── */
+  [1, 2, 3].forEach(id => {
+    const initFloors = [0, 3, -1];          // matches Building.__init__
+    const car = document.getElementById(`car-${id}`);
+    car.style.top = `${floorToTop(initFloors[id - 1])}px`;
+  });
+
+  connect();
+</script>
+</body>
+</html>

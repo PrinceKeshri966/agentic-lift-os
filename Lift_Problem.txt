@@ -1,0 +1,39 @@
+# ROLE: Senior Software Engineer & System Architect
+# OBJECTIVE: Design and implement a multi-agent Elevator (Lift) Simulation and Dispatch System. 
+# TARGET AI INSTRUCTION: Claude, act as a senior backend engineer. Read the following system requirements and architecture guidelines carefully. Generate a fully functional, Object-Oriented Python simulation based exactly on these constraints.
+
+## 1. SYSTEM OVERVIEW
+We are building an event-driven simulation for a building's elevator system. The system consists of 3 Elevators and 7 Floors (Basement -1, Ground 0, and Floors 1 through 5). 
+The system requires two distinct intelligent agents operating concurrently:
+1. The User Behavior Simulator Agent (generating traffic).
+2. The Central Lift Dispatcher Agent (optimizing lift movement).
+
+## 2. AGENT 1: USER BEHAVIOR SIMULATOR
+This agent continuously simulates human behavior in the building to stress-test the Dispatcher.
+- External Requests: Users standing on a floor pressing "Up" or "Down".
+- Internal Requests: Users inside a lift pressing a destination floor.
+- Edge Case Constraints: 
+  * If a user is at Basement (-1), they can only request "Up".
+  * If a user is at the Top Floor (5), they can only request "Down".
+- Randomization: Introduce random time delays and realistic traffic patterns (e.g., multiple people pressing buttons at the same time on different floors).
+
+## 3. AGENT 2: CENTRAL LIFT DISPATCHER (THE ALGORITHM)
+This is the core optimization brain. It receives external requests from the Simulator and decides which of the 3 lifts to assign.
+- State Tracking: Must track the state of all 3 lifts (Current Floor, Direction: UP/DOWN/IDLE, Target Floors).
+- Optimization Rules:
+  * Proximity & Direction: If Lift 1 is on Floor 1 going UP, and a user on Floor 3 presses UP, Lift 1 should stop at Floor 3 on its way.
+  * Idle Prioritization: If a lift is IDLE and closest to the requested floor, assign it first.
+  * Cost Calculation: Implement a basic cost function (distance + current load) to assign the most optimal lift, minimizing user wait time.
+
+## 4. TECHNICAL & ARCHITECTURAL REQUIREMENTS
+- Language: Python 3.x
+- Architecture: Object-Oriented Programming (Classes for Lift, Building, Dispatcher, and Simulator).
+- Concurrency: Use threading or asyncio to allow the Simulator Agent to generate requests in real-time while the Dispatcher Agent moves the lifts.
+- Output/Logging: The terminal must print a clear, readable log of the simulation. 
+  Example: 
+  [Simulator] User at Floor 2 requests UP.
+  [Dispatcher] Assigned Lift 2 (currently at Ground, Idle) to Floor 2.
+  [Lift 2] Arrived at Floor 2. User entered. Destination set to Floor 5.
+
+## 5. EXECUTION INSTRUCTION FOR CLAUDE
+Do not write pseudo-code. Write a complete, execution-ready Python script that fulfills all the above constraints. The code must be modular, heavily commented, and capable of running a 60-second real-time simulation when executed.
