@@ -3,7 +3,7 @@
 **Lift OS** is a real-time, event-driven, multi-agent elevator simulation built with **FastAPI**, **Python `asyncio`**, and **WebSockets**. It visualizes a highly optimized dispatch algorithm handling randomized human traffic across a multi-story building.
 
 ![Lift OS Interface](UI_Screenshot.png)
-*(Note: Replace this placeholder with a screenshot or GIF of your running UI)*
+
 
 ## 🧠 System Architecture
 
