@@ -39,5 +39,5 @@ Follow these steps to run the simulation on your local machine:
 
 **1. Clone the repository:**
 ```bash
-git clone [https://github.com/PrinceKeshri966/agentic-lift-os.git](https://github.com/your-username/agentic-lift-os.git)
+git clone [https://github.com/PrinceKeshri966/agentic-lift-os.git]
 cd agentic-lift-os
